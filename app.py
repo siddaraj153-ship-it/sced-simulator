@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from solver import solve_ed
+from solver import solve_dc_sced
 
 st.set_page_config(page_title="SCED Simulator", layout="wide")
 
