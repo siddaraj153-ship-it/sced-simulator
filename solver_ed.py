@@ -3,6 +3,14 @@ from pyomo.contrib.appsi.solvers import Highs
 
 
 def solve_ed(load, generators):
+    """
+    generators format:
+    [
+        {"name":"G1","pmin":50,"pmax":300,"cost":20},
+        {"name":"G2","pmin":30,"pmax":200,"cost":25}
+    ]
+    """
+
     n = len(generators)
 
     model = ConcreteModel()
@@ -15,7 +23,7 @@ def solve_ed(load, generators):
         sense=minimize
     )
 
-    # Load balance
+    # Power balance
     model.balance = Constraint(
         expr=sum(model.P[g] for g in model.G) == load
     )
@@ -33,7 +41,10 @@ def solve_ed(load, generators):
     solver = Highs()
     solver.solve(model)
 
-    dispatch = [value(model.P[g]) for g in model.G]
+    dispatch = []
     total_cost = value(model.obj)
+
+    for g in model.G:
+        dispatch.append(value(model.P[g]))
 
     return dispatch, total_cost
