@@ -1,33 +1,59 @@
-from pyomo.environ import *
-from pyomo.contrib.appsi.solvers import Highs
+import streamlit as st
+import pandas as pd
+from solver import solve_ed
 
+st.set_page_config(page_title="SCED Simulator", layout="wide")
 
-def solve_ed(load, generators):
-    n = len(generators)
+st.title("SCED / Economic Dispatch Simulator")
 
-    model = ConcreteModel()
+st.sidebar.header("System Settings")
+load = st.sidebar.number_input("Total Load Demand (MW)", min_value=1, value=500)
+num_gens = st.sidebar.number_input("Number of Generators", min_value=1, value=3)
 
-    model.G = RangeSet(0, n - 1)
-    model.P = Var(model.G, within=NonNegativeReals)
+st.header("Generator Configuration")
 
-    model.obj = Objective(
-        expr=sum(generators[g]["cost"] * model.P[g] for g in model.G),
-        sense=minimize
-    )
+generator_data = []
 
-    model.balance = Constraint(
-        expr=sum(model.P[g] for g in model.G) == load
-    )
+for i in range(num_gens):
+    st.subheader(f"Generator {i+1}")
 
-    def gen_limits_rule(model, g):
-        return (generators[g]["pmin"], model.P[g], generators[g]["pmax"])
+    col1, col2, col3, col4 = st.columns(4)
 
-    model.gen_limits = Constraint(model.G, rule=gen_limits_rule)
+    with col1:
+        name = st.text_input(f"Generator Name", value=f"G{i+1}", key=f"name{i}")
 
-    solver = Highs()
-    solver.solve(model)
+    with col2:
+        pmin = st.number_input(f"{name} Min MW", min_value=0, value=50, key=f"min{i}")
 
-    dispatch = [value(model.P[g]) for g in model.G]
-    total_cost = value(model.obj)
+    with col3:
+        pmax = st.number_input(f"{name} Max MW", min_value=1, value=300, key=f"max{i}")
 
-    return dispatch, total_cost
+    with col4:
+        cost = st.number_input(f"{name} Cost ($/MWh)", min_value=0.0, value=100.0, key=f"cost{i}")
+
+    generator_data.append({
+        "name": name,
+        "pmin": pmin,
+        "pmax": pmax,
+        "cost": cost
+    })
+
+if st.button("Run SCED"):
+    dispatch, total_cost = solve_ed(load, generator_data)
+
+    results = pd.DataFrame({
+        "Generator": [g["name"] for g in generator_data],
+        "Dispatch (MW)": dispatch,
+        "Cost ($/MWh)": [g["cost"] for g in generator_data]
+    })
+
+    st.header("Results")
+    st.dataframe(results)
+
+    st.success(f"Total Cost = ${total_cost:.2f}")
+
+    st.subheader("Dispatch Graph")
+    st.bar_chart(results.set_index("Generator")["Dispatch (MW)"])
+
+    st.subheader("Cost Graph")
+    st.bar_chart(results.set_index("Generator")["Cost ($/MWh)"])
